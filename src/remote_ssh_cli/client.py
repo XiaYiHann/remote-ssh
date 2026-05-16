@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import time
 from typing import Any, List, Optional
+from urllib.parse import urlencode
 
 from remote_ssh_cli.config import (
     CREATE_URL,
+    TASK_DEBUG_URL,
     JsonDict,
     ResolvedConfig,
     SzuAutomationError,
     TargetConfig,
-    TASK_DEBUG_URL,
 )
 from remote_ssh_cli.selectors import (
     select_image,
@@ -21,12 +22,19 @@ from remote_ssh_cli.selectors import (
     select_team,
 )
 from remote_ssh_cli.ssh import (
+    _cluster_proxy,
     build_ssh_commands,
     prefer_debug_ssh_proxy,
     ssh_state_label,
-    _cluster_proxy,
 )
-from remote_ssh_cli.utils import _ensure_list, _id, _norm, _norm_lower, image_label, unwrap_response
+from remote_ssh_cli.utils import (
+    _ensure_list,
+    _id,
+    _norm,
+    _norm_lower,
+    image_label,
+    unwrap_response,
+)
 
 
 class BrowserApiClient:
@@ -71,6 +79,48 @@ class BrowserApiClient:
 
     def get(self, path: str) -> Any:
         return self.request("GET", path, None)
+
+    def file_proxy_get(
+        self, path: str, token: str, params: Optional[JsonDict] = None
+    ) -> Any:
+        """Call the file-proxy API with its bearer token."""
+        query = urlencode(params or {})
+        request_path = f"{path}?{query}" if query else path
+        result = self.page.evaluate(
+            """
+            async ({path, token}) => {
+              const response = await fetch(path, {
+                method: "GET",
+                headers: {
+                  "Accept": "application/json, text/plain, */*",
+                  "Authorization": `Bearer ${token}`
+                },
+                credentials: "include"
+              });
+              const text = await response.text();
+              let payload = text;
+              try { payload = JSON.parse(text); } catch (_) {}
+              return {ok: response.ok, status: response.status, payload};
+            }
+            """,
+            {"path": request_path, "token": token},
+        )
+        if not result.get("ok"):
+            raise SzuAutomationError(
+                f"GET {request_path} failed: status={result.get('status')} "
+                f"body={result.get('payload')}"
+            )
+        payload = result.get("payload")
+        if isinstance(payload, dict):
+            message = payload.get("message")
+            if isinstance(message, dict):
+                code = message.get("code")
+                if code not in (None, 0, "0", 200, "200"):
+                    raise SzuAutomationError(
+                        f"file proxy returned code={code}: {message.get('message')}"
+                    )
+            return payload.get("data", payload)
+        return payload
 
     def selected_cluster(self) -> Optional[JsonDict]:
         value = self.page.evaluate(
@@ -216,6 +266,59 @@ def list_resource_options(client: BrowserApiClient, target: TargetConfig) -> Lis
     return options
 
 
+def _filesystem_storage_root(bucket: JsonDict) -> Optional[str]:
+    bucket_path = _norm(bucket.get("bucketPath"))
+    if not bucket_path:
+        return None
+    if not bucket_path.startswith("/"):
+        bucket_path = f"/{bucket_path}"
+    return f"/share{bucket_path}"
+
+
+def _filesystem_proxy_dir(bucket: JsonDict) -> Optional[str]:
+    bucket_path = _norm(bucket.get("bucketPath")).strip("/")
+    if not bucket_path:
+        return None
+    return f"{bucket_path}/"
+
+
+def resolve_filesystem_storage_path(
+    client: BrowserApiClient, bucket: JsonDict, cluster_id: str
+) -> Optional[str]:
+    """Resolve the path selected by the web UI's file-storage picker."""
+    root = _filesystem_storage_root(bucket)
+    proxy_dir = _filesystem_proxy_dir(bucket)
+    if not root or not proxy_dir:
+        return root
+
+    try:
+        token = client.post(
+            "/gateway/foundation/api/v1/buckets/file-proxy/action/token",
+            {"crName": "home", "expires": 3600, "pathList": ["*"]},
+        )
+        files_payload = client.file_proxy_get(
+            "/gateway/file-proxy/api/v1/list",
+            _norm(token),
+            {
+                "bucketName": "home",
+                "storageType": "filesystem",
+                "dir": proxy_dir,
+                "pageNumber": 1,
+                "pageSize": 20,
+                "region": cluster_id,
+            },
+        )
+    except SzuAutomationError as exc:
+        print(f"[warn] storage directory auto-detection failed; fallback to root: {exc}")
+        return root
+
+    file_list = _ensure_list(files_payload.get("fileList", []), "storage files")
+    for item in file_list:
+        if item.get("directory") is True and _norm(item.get("fileName")):
+            return f"{root}/{_norm(item.get('fileName')).strip('/')}"
+    return root
+
+
 def resolve_config(client: BrowserApiClient, target: TargetConfig) -> ResolvedConfig:
     """Resolve all backend IDs needed to submit a debug job."""
     cluster = resolve_cluster(client, target)
@@ -256,20 +359,25 @@ def resolve_config(client: BrowserApiClient, target: TargetConfig) -> ResolvedCo
     ssh_key = select_ssh_key(ssh_keys_payload, target.ssh_key_keyword)
 
     storage_bucket = None
-    if target.storage_from:
+    storage_path = None
+    if target.storage_from != "":
         try:
             buckets_payload = client.post(
-                "/gateway/foundation/api/v1/buckets/action/list",
-                {
-                    "clusterId": cluster_id,
-                    "status": 1,
-                    "writeFlag": 0,
-                    "onlySelfFlag": 0,
-                },
+                "/gateway/foundation/api/v1/buckets/team-user-storage/action/list",
+                {"teamId": team_id, "clusterId": cluster_id},
             )
-            storage_bucket = select_storage_bucket(buckets_payload, target.storage_from)
+            storage_bucket = select_storage_bucket(
+                buckets_payload, target.storage_from or ""
+            )
+            if target.storage_from:
+                storage_path = target.storage_from
+            elif storage_bucket:
+                storage_path = resolve_filesystem_storage_path(
+                    client, storage_bucket, cluster_id
+                )
         except SzuAutomationError as exc:
             print(f"[warn] storage bucket resolution failed; fallback to team id: {exc}")
+            storage_path = target.storage_from or None
 
     return ResolvedConfig(
         cluster=cluster,
@@ -279,6 +387,7 @@ def resolve_config(client: BrowserApiClient, target: TargetConfig) -> ResolvedCo
         image=image,
         ssh_key=ssh_key,
         storage_bucket=storage_bucket,
+        storage_path=storage_path,
     )
 
 
@@ -290,16 +399,18 @@ def build_payload(target: TargetConfig, resolved: ResolvedConfig) -> JsonDict:
         raise SzuAutomationError(f"team has no teamId/id: {resolved.team}")
 
     storage_entry: Optional[JsonDict] = None
-    if target.storage_from:
+    storage_from = target.storage_from or resolved.storage_path
+    if storage_from:
         bucket = resolved.storage_bucket or {}
+        volume_to = target.mount_to or storage_from
         storage_entry = {
             "kind": "input",
             "businessType": 0,
-            "businessName": bucket.get("name") or bucket.get("bucketName") or "File Storage",
+            "businessName": "home",
             "businessId": "",
             "teamId": bucket.get("id") or team_id,
-            "volumeFrom": target.storage_from,
-            "volumeTo": target.mount_to,
+            "volumeFrom": storage_from,
+            "volumeTo": volume_to,
         }
 
     payload: JsonDict = {

@@ -13,9 +13,14 @@ from remote_ssh_cli.config import (
 from remote_ssh_cli.utils import _ensure_list, _norm, _norm_lower, image_label
 
 
-def select_team(teams_payload: Any, team_name: str) -> JsonDict:
+def select_team(teams_payload: Any, team_name: Optional[str]) -> JsonDict:
     """Pick a team by name from the backend list."""
     teams = _ensure_list(teams_payload, "teams")
+    if not team_name:
+        if not teams:
+            raise SzuAutomationError("team list is empty")
+        return teams[0]
+
     wanted = _norm_lower(team_name)
     for team in teams:
         names = [team.get("teamName"), team.get("name"), team.get("displayName")]
@@ -119,10 +124,15 @@ def select_storage_bucket(buckets_payload: Any, storage_path: str) -> Optional[J
         return None
 
     storage_path = _norm(storage_path)
+    if not storage_path:
+        return buckets[0] if buckets else None
+
     ranked: List[Tuple[int, JsonDict]] = []
     for bucket in buckets:
+        bucket_path = _norm(bucket.get("bucketPath"))
         fields = [
-            bucket.get("bucketPath"),
+            bucket_path,
+            f"/share{bucket_path}" if bucket_path else "",
             bucket.get("path"),
             bucket.get("rootPath"),
             bucket.get("mountPath"),

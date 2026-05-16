@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import getpass
 import json
-import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.console import Console
@@ -16,14 +15,14 @@ from rich.table import Table
 
 from remote_ssh_cli.client import (
     BrowserApiClient,
+    build_payload,
+    list_resource_options,
     login,
     resolve_config,
     resolve_ssh_info,
     submit_payload,
     summarize,
     wait_for_ssh_info,
-    list_resource_options,
-    build_payload,
 )
 from remote_ssh_cli.config import (
     DEFAULT_GPU,
@@ -36,7 +35,7 @@ from remote_ssh_cli.config import (
     TargetConfig,
 )
 from remote_ssh_cli.ssh import job_id_from_create_result
-from remote_ssh_cli.utils import default_key_path, env_default
+from remote_ssh_cli.utils import default_key_path
 
 app = typer.Typer(
     help="Manage GPU debug jobs and SSH connections on SZU AI Cloud",
@@ -95,11 +94,23 @@ def create(
     username: Optional[str] = typer.Option(None, "--username", envvar="SZU_AICLOUD_USERNAME"),
     password: Optional[str] = typer.Option(None, "--password", envvar="SZU_AICLOUD_PASSWORD"),
     key_path: str = typer.Option(default_key_path(), "--key-path"),
-    team: str = typer.Option(DEFAULT_TEAM, "--team"),
+    team: Optional[str] = typer.Option(
+        DEFAULT_TEAM,
+        "--team",
+        help="Team name; defaults to the first available team",
+    ),
     job_name: Optional[str] = typer.Option(None, "--job-name"),
     image: str = typer.Option(DEFAULT_IMAGE, "--image"),
-    storage_from: str = typer.Option(DEFAULT_STORAGE, "--storage-from"),
-    mount_to: str = typer.Option(DEFAULT_MOUNT, "--mount-to"),
+    storage_from: Optional[str] = typer.Option(
+        DEFAULT_STORAGE,
+        "--storage-from",
+        help="File-storage path; defaults to auto-detecting the current team's storage",
+    ),
+    mount_to: Optional[str] = typer.Option(
+        DEFAULT_MOUNT,
+        "--mount-to",
+        help="Container mount path; defaults to the selected file-storage path",
+    ),
     gpu: str = typer.Option(DEFAULT_GPU, "--gpu"),
     ssh_key: str = typer.Option(DEFAULT_KEY, "--ssh-key"),
     duration_hours: int = typer.Option(1, "--duration-hours"),

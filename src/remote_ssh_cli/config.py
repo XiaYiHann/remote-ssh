@@ -12,9 +12,9 @@ CREATE_URL = f"{BASE_URL}/console/task-debug/create"
 TASK_DEBUG_URL = f"{BASE_URL}/console/task-debug"
 
 DEFAULT_IMAGE = "pytorch:2.2.2-cuda12.1-cudnn8-py310-ubuntu22.04"
-DEFAULT_TEAM = "eth.ai"
-DEFAULT_STORAGE = "/share/home/tm1060387743010000/a959271000/xyh"
-DEFAULT_MOUNT = "/workspace"
+DEFAULT_TEAM = None
+DEFAULT_STORAGE = None
+DEFAULT_MOUNT = None
 DEFAULT_GPU = "4090"
 DEFAULT_KEY = "server"
 
@@ -27,11 +27,11 @@ class SzuAutomationError(RuntimeError):
 class TargetConfig:
     """User-requested target configuration."""
 
-    team_name: str = DEFAULT_TEAM
+    team_name: Optional[str] = DEFAULT_TEAM
     job_name: str = "remote-ssh-debug-4090"
     image: str = DEFAULT_IMAGE
-    storage_from: str = DEFAULT_STORAGE
-    mount_to: str = DEFAULT_MOUNT
+    storage_from: Optional[str] = DEFAULT_STORAGE
+    mount_to: Optional[str] = DEFAULT_MOUNT
     gpu_keyword: str = DEFAULT_GPU
     ssh_key_keyword: str = DEFAULT_KEY
     duration_hours: int = 1
@@ -51,6 +51,7 @@ class ResolvedConfig:
     image: JsonDict
     ssh_key: JsonDict
     storage_bucket: Optional[JsonDict]
+    storage_path: Optional[str]
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ Inspired by the Claude Code `remote-ssh` skill, this package extracts the core a
 - **Create debug jobs**: single-card 4090, multi-card H100/H200 — all controllable from the CLI.
 - **SSH auto-resolution**: polls the debug URL endpoint until SSH is ready, then prints OS-specific SSH commands.
 - **Resource listing**: browse available GPU pools and power configs across clusters.
+- **File-storage mount**: selects the SZU AI Cloud file-storage backend and mounts the chosen path by default.
 - **Credential fallback**: reads `SZU_AICLOUD_USERNAME` / `PASSWORD` from environment variables or `~/.bashrc` exports.
 
 ## Installation
@@ -59,6 +60,12 @@ remote-ssh list-resources
 remote-ssh create --gpu 4090 --duration-hours 1 --card-num 1
 ```
 
+By default, the CLI auto-detects the current team's file storage. It mirrors
+choosing “文件存储” in the web UI: it selects the current team's storage root,
+then uses the first available directory when the backend lists one. Override it
+with `--storage-from`; use `--mount-to` only when the container mount path must
+be different from the file-storage path.
+
 ### 4. Create and wait for SSH
 
 ```bash
@@ -88,7 +95,9 @@ remote-ssh ssh <job_id> --wait-ssh
 | `--gpu` | `4090` | GPU keyword to match (e.g. `H100`, `H200`) |
 | `--card-num` | `1` | Number of GPU cards |
 | `--duration-hours` | `1` | Debug job duration |
-| `--team` | `eth.ai` | Team name |
+| `--team` | first available team | Team name |
+| `--storage-from` | auto-detected | File-storage path to mount |
+| `--mount-to` | same as `--storage-from` | Container mount path |
 | `--key-path` | `~/.ssh/id_rsa` | SSH private key path |
 | `--proxy` | — | HTTP proxy for Playwright browser |
 | `--headed` | `false` | Show browser window (useful for debugging login) |

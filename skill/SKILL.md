@@ -51,6 +51,12 @@ When the user intent is operational, submit and wait for SSH readiness:
 remote-ssh create --submit --wait-ssh --gpu 4090 --card-num 1 --duration-hours 1 --job-name "<project>-debug-$(date +%Y%m%d-%H%M%S)"
 ```
 
+The CLI auto-detects and mounts the current team's file storage unless
+overridden. To match the web UI's “文件存储” selection flow, leave
+`--storage-from` and `--mount-to` unset; it will use the detected file-storage
+path as the container mount path. Use `--mount-to` only for an explicit
+container mount path.
+
 High-memory multi-GPU examples:
 
 ```bash
