@@ -1,8 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="remote-ssh"
+REPO_URL="https://github.com/yourusername/remote-ssh.git"
+
+# Detect whether this script is being run from inside the repo or via curl/pipe.
+SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+SCRIPT_DIR=""
+if [ -f "${SCRIPT_SOURCE}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_SOURCE}")" && pwd)"
+fi
+
+# If skill/SKILL.md is missing, we are not inside the cloned repo — fetch it first.
+if [ -z "${SCRIPT_DIR}" ] || [ ! -f "${SCRIPT_DIR}/skill/SKILL.md" ] || [ ! -f "${SCRIPT_DIR}/pyproject.toml" ]; then
+    TMP_DIR="$(mktemp -d)"
+    echo "==> Fetching ${REPO_NAME} repository ..."
+    git clone --depth 1 "${REPO_URL}" "${TMP_DIR}/${REPO_NAME}"
+    SCRIPT_DIR="${TMP_DIR}/${REPO_NAME}"
+    echo "    Cloned to ${SCRIPT_DIR}"
+fi
 
 SKILL_SRC="${SCRIPT_DIR}/skill/SKILL.md"
 SKILL_DST_DIR="${HOME}/.agents/skills/${REPO_NAME}"

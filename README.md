@@ -14,13 +14,25 @@ Inspired by the Claude Code `remote-ssh` skill, this package extracts the core a
 
 ## Installation
 
+### Quick install (curl + bash)
+
+```bash
+# GitHub official
+curl -fsSL https://raw.githubusercontent.com/yourusername/remote-ssh/main/install.sh | bash
+
+# China mirror (ghproxy)
+curl -fsSL https://ghproxy.com/https://raw.githubusercontent.com/yourusername/remote-ssh/main/install.sh | bash
+```
+
+### Manual (git clone)
+
 ```bash
 git clone https://github.com/yourusername/remote-ssh.git
 cd remote-ssh
 ./install.sh
 ```
 
-This installs both the CLI (`remote-ssh`) and the Claude Code skill (`~/.claude/skills/remote-ssh`).
+All methods install both the CLI (`remote-ssh`) and the Claude Code skill (`~/.claude/skills/remote-ssh`).
 
 ## Quick Start
 
