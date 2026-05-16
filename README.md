@@ -18,16 +18,16 @@ Inspired by the Claude Code `remote-ssh` skill, this package extracts the core a
 
 ```bash
 # GitHub official
-curl -fsSL https://raw.githubusercontent.com/yourusername/remote-ssh/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/XiaYiHann/remote-ssh/main/install.sh | bash
 
 # China mirror (ghproxy)
-curl -fsSL https://ghproxy.com/https://raw.githubusercontent.com/yourusername/remote-ssh/main/install.sh | bash
+curl -fsSL https://ghproxy.com/https://raw.githubusercontent.com/XiaYiHann/remote-ssh/main/install.sh | bash
 ```
 
 ### Manual (git clone)
 
 ```bash
-git clone https://github.com/yourusername/remote-ssh.git
+git clone https://github.com/XiaYiHann/remote-ssh.git
 cd remote-ssh
 ./install.sh
 ```

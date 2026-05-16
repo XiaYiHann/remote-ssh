@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_NAME="remote-ssh"
-REPO_URL="https://github.com/yourusername/remote-ssh.git"
+REPO_URL="https://github.com/XiaYiHann/remote-ssh.git"
 
 # Detect whether this script is being run from inside the repo or via curl/pipe.
 SCRIPT_SOURCE="${BASH_SOURCE[0]}"

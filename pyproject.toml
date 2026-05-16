@@ -49,9 +49,9 @@ dev = [
 remote-ssh = "remote_ssh_cli.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/remote-ssh"
-Repository = "https://github.com/yourusername/remote-ssh"
-Issues = "https://github.com/yourusername/remote-ssh/issues"
+Homepage = "https://github.com/XiaYiHann/remote-ssh"
+Repository = "https://github.com/XiaYiHann/remote-ssh"
+Issues = "https://github.com/XiaYiHann/remote-ssh/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/remote_ssh_cli"]
