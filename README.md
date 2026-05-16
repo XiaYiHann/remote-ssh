@@ -1,8 +1,8 @@
-# remote-ssh-cli
+# remote-ssh
 
 CLI tool for managing GPU debug jobs and SSH connections on **SZU AI Cloud**.
 
-Inspired by the Claude Code `remote-ssh` skill, this package extracts the core automation into an independent, pip-installable command-line tool so you can use it **without Claude Code**.
+Inspired by the Claude Code `remote-ssh` skill, this package extracts the core automation into an independent command-line tool so you can use it **without Claude Code**.
 
 ## Features
 
@@ -15,16 +15,12 @@ Inspired by the Claude Code `remote-ssh` skill, this package extracts the core a
 ## Installation
 
 ```bash
-pip install remote-ssh-cli
+git clone https://github.com/yourusername/remote-ssh.git
+cd remote-ssh
+./install.sh
 ```
 
-Or install from source:
-
-```bash
-git clone https://github.com/yourusername/remote-ssh-cli.git
-cd remote-ssh-cli
-pip install -e ".[dev]"
-```
+This installs both the CLI (`remote-ssh`) and the Claude Code skill (`~/.claude/skills/remote-ssh`).
 
 ## Quick Start
 
@@ -88,7 +84,7 @@ remote-ssh ssh <job_id> --wait-ssh
 ## Project Structure
 
 ```
-remote-ssh-cli/
+remote-ssh/
 ├── src/remote_ssh_cli/
 │   ├── cli.py       # Typer command-line interface
 │   ├── client.py    # Playwright browser automation
@@ -96,7 +92,10 @@ remote-ssh-cli/
 │   ├── selectors.py # Backend record selection logic
 │   ├── ssh.py       # SSH command generation
 │   └── utils.py     # Credential and response helpers
+├── skill/
+│   └── SKILL.md     # Claude Code skill instructions
 ├── tests/
+├── install.sh       # One-shot CLI + skill installer
 ├── pyproject.toml
 └── README.md
 ```

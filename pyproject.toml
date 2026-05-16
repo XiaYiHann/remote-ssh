@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "remote-ssh-cli"
+name = "remote-ssh"
 version = "0.1.0"
 description = "CLI tool for managing remote GPU debug jobs and SSH connections on SZU AI Cloud"
 readme = "README.md"
@@ -47,12 +47,11 @@ dev = [
 
 [project.scripts]
 remote-ssh = "remote_ssh_cli.cli:app"
-szu-aicloud = "remote_ssh_cli.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/remote-ssh-cli"
-Repository = "https://github.com/yourusername/remote-ssh-cli"
-Issues = "https://github.com/yourusername/remote-ssh-cli/issues"
+Homepage = "https://github.com/yourusername/remote-ssh"
+Repository = "https://github.com/yourusername/remote-ssh"
+Issues = "https://github.com/yourusername/remote-ssh/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/remote_ssh_cli"]
