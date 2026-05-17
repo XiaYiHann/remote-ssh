@@ -88,7 +88,93 @@ timeout 30 ssh -i ~/.ssh/id_rsa \
 
 Prefer IP-based proxy commands for local execution. If the CLI prints both a domain proxy and a runtime `sshUrl` IP, use the IP plus the original proxy port to avoid TUN/DNS issues.
 
-### 7. Report to user
+### 7. Optional reverse proxy tunnel
+
+If the remote job has no public internet but the local machine has a working
+HTTP/SOCKS proxy, prefer an SSH reverse tunnel before building large offline
+bundles. Bind only to remote loopback so the proxy is not exposed to other
+machines:
+
+```bash
+ssh -N -f \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -R 127.0.0.1:17890:127.0.0.1:7890 \
+  <HOST>
+```
+
+This maps remote `127.0.0.1:17890` to the local proxy at `127.0.0.1:7890`.
+Adjust the local port if the user's proxy listens elsewhere. On the remote,
+export proxy variables according to the local proxy protocol:
+
+```bash
+export http_proxy=http://127.0.0.1:17890
+export https_proxy=http://127.0.0.1:17890
+export HTTP_PROXY=$http_proxy
+export HTTPS_PROXY=$https_proxy
+```
+
+For SOCKS-only proxies, use:
+
+```bash
+export all_proxy=socks5h://127.0.0.1:17890
+export ALL_PROXY=$all_proxy
+```
+
+Verify the tunnel before relying on it:
+
+```bash
+ssh <HOST> 'curl -I --max-time 10 https://huggingface.co || curl -I --max-time 10 https://github.com'
+```
+
+If reverse forwarding is disabled, the local proxy port is wrong, or the test
+fails, fall back to the local-prepare-and-transfer workflow below.
+
+### 8. Probe remote environment, then prepare locally
+
+Assume SZU AI Cloud debug jobs do not have public internet access. Do not start
+by running remote `wget`, `curl`, `git clone`, `pip install`, `apt`, `hf
+download`, or model download commands unless remote outbound network access has
+been explicitly verified.
+
+Before installing anything, run a remote preflight over SSH and identify the
+minimum missing environment:
+
+```bash
+ssh <HOST> 'set -eu
+echo "== system =="; uname -a; whoami; pwd
+echo "== gpu =="; command -v nvidia-smi >/dev/null && nvidia-smi -L || true
+echo "== tools =="; for x in python python3 pip pip3 uv conda git rsync tar unzip gcc g++ make cmake nvcc; do command -v "$x" >/dev/null && printf "%s %s\n" "$x" "$(command -v "$x")" || printf "%s MISSING\n" "$x"; done
+echo "== python =="; python3 --version 2>/dev/null || true; python3 -m pip --version 2>/dev/null || true
+echo "== cuda =="; nvcc --version 2>/dev/null || true
+echo "== mounts =="; df -h; mount | grep -E "/share|workspace|home" || true
+'
+```
+
+Then prepare only what is missing on the local machine and transfer it over SSH.
+Use this rule for Python wheels, Conda/env archives, source archives, model
+weights, datasets, binaries, license files, and large config bundles:
+
+1. Build or download missing artifacts locally, using local internet/proxy.
+2. Prefer portable artifacts: `pip download -d wheelhouse ...`, `uv pip
+   compile` plus a wheelhouse, `conda-pack`, tarballs, model snapshots, or
+   checked-out source archives.
+3. Verify local files exist and, for large artifacts, record size or checksum
+   when practical.
+4. Transfer with `rsync -avP`, `scp`, or `ssh <HOST> "cat > <remote-path>" <
+   <local-file>`.
+5. Install on the remote from local files only, for example `pip install
+   --no-index --find-links <wheelhouse> -r requirements.txt`, unpack a
+   `conda-pack` archive, or point model code at the copied model directory.
+6. Put persistent assets under the mounted file-storage path when they must
+   survive job termination; use `/root`, `/tmp`, or `/workspace` only for
+   disposable runtime state unless those paths are backed by the mount.
+
+When reporting a remote setup plan, include: preflight findings, missing
+components, local artifacts prepared, transfer destination, and remote install
+commands.
+
+### 9. Report to user
 
 Final response should include:
 - task id and task name
@@ -97,7 +183,7 @@ Final response should include:
 - verification result
 - expiry or configured duration
 
-### 8. Tool deployment
+### 10. Tool deployment
 
 When the user mentions `bita` or provides a bita download URL:
 
