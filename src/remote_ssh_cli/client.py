@@ -8,6 +8,8 @@ from urllib.parse import urlencode
 
 from remote_ssh_cli.config import (
     CREATE_URL,
+    DEFAULT_IMAGE,
+    DEFAULT_IMAGE_SOURCE,
     TASK_DEBUG_URL,
     JsonDict,
     ResolvedConfig,
@@ -35,6 +37,8 @@ from remote_ssh_cli.utils import (
     image_label,
     unwrap_response,
 )
+
+IMAGE_SOURCE_CODES = {"official": 1, "custom": 2, "shared": 3}
 
 
 class BrowserApiClient:
@@ -319,6 +323,71 @@ def resolve_filesystem_storage_path(
     return root
 
 
+def _image_source_order(image_source: str) -> List[str]:
+    source = _norm_lower(image_source or DEFAULT_IMAGE_SOURCE)
+    if source == "auto":
+        return ["custom", "official"]
+    if source in IMAGE_SOURCE_CODES:
+        return [source]
+    choices = ", ".join(["auto", *IMAGE_SOURCE_CODES.keys()])
+    raise SzuAutomationError(f"invalid image source: {image_source}; choices={choices}")
+
+
+def _image_list_payload(source: str, team_id: str, cluster_id: str) -> JsonDict:
+    payload: JsonDict = {
+        "source": IMAGE_SOURCE_CODES[source],
+        "name": "",
+        "operateSystemList": [],
+        "cpuArchitectureList": [],
+        "cardTypeList": [],
+        "frameList": [],
+    }
+    if source in ("custom", "shared"):
+        payload["teamId"] = team_id
+        payload["clusterId"] = cluster_id
+    else:
+        payload["teamId"] = None
+    return payload
+
+
+def _image_list_endpoint(source: str) -> str:
+    if source == "official":
+        return "/gateway/foundation/api/v1/image-job/action/official/list"
+    return "/gateway/foundation/api/v1/image-job/action/list"
+
+
+def _tag_image_source(image: JsonDict, source: str) -> JsonDict:
+    tagged = dict(image)
+    tagged["_source"] = source
+    tagged["_sourceCode"] = IMAGE_SOURCE_CODES[source]
+    return tagged
+
+
+def resolve_image(
+    client: BrowserApiClient, target: TargetConfig, team_id: str, cluster_id: str
+) -> JsonDict:
+    """Resolve the image ID, preferring team custom images in auto mode."""
+    errors: List[str] = []
+    requested_sources = _image_source_order(target.image_source)
+    for source in requested_sources:
+        images_payload = client.post(
+            _image_list_endpoint(source),
+            _image_list_payload(source, team_id=team_id, cluster_id=cluster_id),
+        )
+        try:
+            image = select_image(
+                images_payload,
+                target.image,
+                allow_first=source == "custom" and _norm(target.image) == DEFAULT_IMAGE,
+            )
+            return _tag_image_source(image, source)
+        except SzuAutomationError as exc:
+            errors.append(f"{source}: {exc}")
+            if len(requested_sources) == 1:
+                raise
+    raise SzuAutomationError("image not found; " + "; ".join(errors))
+
+
 def resolve_config(client: BrowserApiClient, target: TargetConfig) -> ResolvedConfig:
     """Resolve all backend IDs needed to submit a debug job."""
     cluster = resolve_cluster(client, target)
@@ -341,19 +410,7 @@ def resolve_config(client: BrowserApiClient, target: TargetConfig) -> ResolvedCo
         pools_payload, gpu_keyword=target.gpu_keyword, card_num=target.card_num
     )
 
-    image_payload = {
-        "source": 1,
-        "name": "",
-        "operateSystemList": [],
-        "cpuArchitectureList": [],
-        "cardTypeList": [],
-        "frameList": [],
-        "teamId": None,
-    }
-    images_payload = client.post(
-        "/gateway/foundation/api/v1/image-job/action/official/list", image_payload
-    )
-    image = select_image(images_payload, target.image)
+    image = resolve_image(client, target, team_id=team_id, cluster_id=cluster_id)
 
     ssh_keys_payload = client.get("/gateway/foundation/api/v1/ssh/action/list")
     ssh_key = select_ssh_key(ssh_keys_payload, target.ssh_key_keyword)
@@ -453,6 +510,7 @@ def summarize(
         "team": resolved.team.get("teamName") or resolved.team.get("name"),
         "job_name": target.job_name,
         "image": image_label(resolved.image),
+        "image_source": resolved.image.get("_source"),
         "imageId": payload["jobTaskList"][0]["imageId"],
         "resource_pool": resolved.resource_pool.get("name")
         or resolved.resource_pool.get("id"),

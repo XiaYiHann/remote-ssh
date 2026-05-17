@@ -12,6 +12,8 @@ CREATE_URL = f"{BASE_URL}/console/task-debug/create"
 TASK_DEBUG_URL = f"{BASE_URL}/console/task-debug"
 
 DEFAULT_IMAGE = "pytorch:2.2.2-cuda12.1-cudnn8-py310-ubuntu22.04"
+DEFAULT_IMAGE_SOURCE = "auto"
+IMAGE_SOURCE_CHOICES = ("auto", "custom", "official", "shared")
 DEFAULT_TEAM = None
 DEFAULT_STORAGE = None
 DEFAULT_MOUNT = None
@@ -30,6 +32,7 @@ class TargetConfig:
     team_name: Optional[str] = DEFAULT_TEAM
     job_name: str = "remote-ssh-debug-4090"
     image: str = DEFAULT_IMAGE
+    image_source: str = DEFAULT_IMAGE_SOURCE
     storage_from: Optional[str] = DEFAULT_STORAGE
     mount_to: Optional[str] = DEFAULT_MOUNT
     gpu_keyword: str = DEFAULT_GPU

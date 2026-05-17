@@ -11,6 +11,7 @@ Inspired by the Claude Code `remote-ssh` skill, this package extracts the core a
 - **SSH auto-resolution**: polls the debug URL endpoint until SSH is ready, then prints OS-specific SSH commands.
 - **Resource listing**: browse available GPU pools and power configs across clusters.
 - **File-storage mount**: selects the SZU AI Cloud file-storage backend and mounts the chosen path by default.
+- **Custom-image priority**: checks the team's custom images first, then falls back to platform images.
 - **Credential fallback**: reads `SZU_AICLOUD_USERNAME` / `PASSWORD` from environment variables or `~/.bashrc` exports.
 
 ## Installation
@@ -66,6 +67,12 @@ then uses the first available directory when the backend lists one. Override it
 with `--storage-from`; use `--mount-to` only when the container mount path must
 be different from the file-storage path.
 
+Image selection defaults to `--image-source auto`: the CLI lists the selected
+team's custom images first and uses the first available custom image unless
+`--image` names a specific image. If no custom image is usable, it falls back to
+the platform image list. Use `--image-source official` to force platform images,
+or `--image-source custom` / `shared` when a specific source is required.
+
 ### 4. Create and wait for SSH
 
 ```bash
@@ -77,6 +84,20 @@ remote-ssh create --submit --wait-ssh --gpu H100 --card-num 4 --duration-hours 4
 ```bash
 remote-ssh ssh <job_id> --wait-ssh
 ```
+
+## Remote Experiment Workflow
+
+For long-running experiments, start a dedicated `tmux` session on the remote
+server, write checkpoints and logs to the mounted file-storage path, and
+detach immediately so the SSH connection can be reused for other tasks.
+
+```bash
+ssh <HOST> "tmux new-session -Ad -s <SESSION>"
+ssh <HOST> "tmux send-keys -t <SESSION> 'cd <WORKDIR> && <RUN_CMD> 2>&1 | tee -a <LOG_FILE>' C-m"
+```
+
+Reattach later with `tmux attach -t <SESSION>` when you need to inspect
+progress.
 
 ## Commands
 
@@ -96,6 +117,7 @@ remote-ssh ssh <job_id> --wait-ssh
 | `--card-num` | `1` | Number of GPU cards |
 | `--duration-hours` | `1` | Debug job duration |
 | `--team` | first available team | Team name |
+| `--image-source` | `auto` | Image source: custom first, then official fallback |
 | `--storage-from` | auto-detected | File-storage path to mount |
 | `--mount-to` | same as `--storage-from` | Container mount path |
 | `--key-path` | `~/.ssh/id_rsa` | SSH private key path |

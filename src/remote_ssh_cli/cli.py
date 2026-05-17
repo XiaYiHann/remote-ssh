@@ -27,10 +27,12 @@ from remote_ssh_cli.client import (
 from remote_ssh_cli.config import (
     DEFAULT_GPU,
     DEFAULT_IMAGE,
+    DEFAULT_IMAGE_SOURCE,
     DEFAULT_KEY,
     DEFAULT_MOUNT,
     DEFAULT_STORAGE,
     DEFAULT_TEAM,
+    IMAGE_SOURCE_CHOICES,
     SzuAutomationError,
     TargetConfig,
 )
@@ -101,6 +103,11 @@ def create(
     ),
     job_name: Optional[str] = typer.Option(None, "--job-name"),
     image: str = typer.Option(DEFAULT_IMAGE, "--image"),
+    image_source: str = typer.Option(
+        DEFAULT_IMAGE_SOURCE,
+        "--image-source",
+        help="Image source: auto prefers custom images then falls back to official; choices: auto, custom, official, shared",
+    ),
     storage_from: Optional[str] = typer.Option(
         DEFAULT_STORAGE,
         "--storage-from",
@@ -124,11 +131,16 @@ def create(
     actual_password = password or getpass.getpass("SZU password: ")
     if not actual_username or not actual_password:
         raise typer.BadParameter("username and password are required")
+    normalized_image_source = image_source.strip().lower()
+    if normalized_image_source not in IMAGE_SOURCE_CHOICES:
+        choices = ", ".join(IMAGE_SOURCE_CHOICES)
+        raise typer.BadParameter(f"image source must be one of: {choices}")
 
     target = TargetConfig(
         team_name=team,
         job_name=job_name or f"remote-ssh-debug-{int(time.time())}",
         image=image,
+        image_source=normalized_image_source,
         storage_from=storage_from,
         mount_to=mount_to,
         gpu_keyword=gpu,

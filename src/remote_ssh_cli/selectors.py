@@ -7,6 +7,7 @@ from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 from remote_ssh_cli.config import (
     DEFAULT_GPU,
+    DEFAULT_IMAGE,
     JsonDict,
     SzuAutomationError,
 )
@@ -32,21 +33,36 @@ def select_team(teams_payload: Any, team_name: Optional[str]) -> JsonDict:
     raise SzuAutomationError(f"team not found: {team_name}; available={available}")
 
 
-def select_image(images_payload: Any, target_image: str) -> JsonDict:
+def select_image(
+    images_payload: Any, target_image: str, allow_first: bool = False
+) -> JsonDict:
     """Pick an image by exact or partial match."""
     images = _ensure_list(images_payload, "images")
     wanted = _norm_lower(target_image)
     partial: List[JsonDict] = []
+    partial_keys: set[str] = set()
     for image in images:
         label = _norm_lower(image_label(image))
+        image_id = _norm_lower(image.get("id"))
         if label == wanted:
             if not image.get("id"):
                 raise SzuAutomationError(f"target image has no id: {image_label(image)}")
             return image
+        partial_key = image_id or label
+        if wanted and (wanted in label or wanted == image_id):
+            if partial_key not in partial_keys:
+                partial.append(image)
+                partial_keys.add(partial_key)
         if "pytorch" in label and "2.2.2" in label and "cuda12.1" in label:
-            partial.append(image)
+            if partial_key not in partial_keys:
+                partial.append(image)
+                partial_keys.add(partial_key)
     if len(partial) == 1 and partial[0].get("id"):
         return partial[0]
+    if allow_first and _norm(target_image) == DEFAULT_IMAGE:
+        for image in images:
+            if image.get("id"):
+                return image
     matches = ", ".join(image_label(item) for item in partial[:5])
     raise SzuAutomationError(f"image not found uniquely: {target_image}; partial={matches}")
 

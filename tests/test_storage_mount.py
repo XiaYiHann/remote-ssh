@@ -102,8 +102,14 @@ def test_build_payload_uses_auto_resolved_storage_path() -> None:
 class FakeClient:
     """Minimal API client stub for storage-resolution contract tests."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        custom_images: Optional[list[dict[str, Any]]] = None,
+        official_images: Optional[list[dict[str, Any]]] = None,
+    ) -> None:
         self.posts: list[tuple[str, dict[str, Any]]] = []
+        self.custom_images = custom_images
+        self.official_images = official_images
 
     def selected_cluster(self) -> None:
         """No preselected cluster is needed for this test."""
@@ -131,8 +137,18 @@ class FakeClient:
                     ],
                 }
             ]
+        if path == "/gateway/foundation/api/v1/image-job/action/list":
+            return (
+                self.custom_images
+                if self.custom_images is not None
+                else [{"id": "custom-image-1", "name": "custom-dev", "tag": "latest"}]
+            )
         if path == "/gateway/foundation/api/v1/image-job/action/official/list":
-            return [{"id": "image-1", "name": DEFAULT_IMAGE}]
+            return (
+                self.official_images
+                if self.official_images is not None
+                else [{"id": "image-1", "name": DEFAULT_IMAGE}]
+            )
         if path == "/gateway/foundation/api/v1/buckets/team-user-storage/action/list":
             return [{"id": TEAM_ID, "name": "eth.ai", "bucketPath": BUCKET_PATH}]
         if path == "/gateway/foundation/api/v1/buckets/file-proxy/action/token":
@@ -175,3 +191,52 @@ def test_resolve_config_uses_team_user_storage_endpoint() -> None:
         "/gateway/foundation/api/v1/buckets/team-user-storage/action/list",
         {"teamId": TEAM_ID, "clusterId": CLUSTER_ID},
     ) in client.posts
+
+
+def test_resolve_config_prefers_custom_image_by_default() -> None:
+    """The shared CLI should prefer the team's custom image when available."""
+    client = FakeClient()
+
+    resolved = resolve_config(client, TargetConfig(storage_from=""))
+
+    assert resolved.image["id"] == "custom-image-1"
+    assert resolved.image["_source"] == "custom"
+    assert (
+        "/gateway/foundation/api/v1/image-job/action/list",
+        {
+            "source": 2,
+            "name": "",
+            "operateSystemList": [],
+            "cpuArchitectureList": [],
+            "cardTypeList": [],
+            "frameList": [],
+            "teamId": TEAM_ID,
+            "clusterId": CLUSTER_ID,
+        },
+    ) in client.posts
+
+
+def test_resolve_config_falls_back_to_official_image_when_custom_is_empty() -> None:
+    """Auto image selection should remain usable for teams without custom images."""
+    client = FakeClient(custom_images=[])
+
+    resolved = resolve_config(client, TargetConfig(storage_from=""))
+
+    assert resolved.image["id"] == "image-1"
+    assert resolved.image["_source"] == "official"
+
+
+def test_resolve_config_official_image_source_skips_custom_lookup() -> None:
+    """Users can force the legacy platform-image behavior explicitly."""
+    client = FakeClient(custom_images=[{"id": "custom-image-1", "name": "custom-dev"}])
+
+    resolved = resolve_config(
+        client,
+        TargetConfig(storage_from="", image_source="official"),
+    )
+
+    assert resolved.image["id"] == "image-1"
+    assert all(
+        path != "/gateway/foundation/api/v1/image-job/action/list"
+        for path, _ in client.posts
+    )

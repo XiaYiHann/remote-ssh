@@ -57,6 +57,13 @@ overridden. To match the web UI's “文件存储” selection flow, leave
 path as the container mount path. Use `--mount-to` only for an explicit
 container mount path.
 
+The CLI defaults to `--image-source auto`, which mirrors choosing “自定义镜像”
+before platform images in the web UI. It lists the selected team's custom
+images first and uses the first available custom image when no specific
+`--image` is requested. If no custom image is usable, it falls back to platform
+images. Use `--image-source official` to force platform images, or
+`--image-source custom` / `shared` for an explicit source.
+
 High-memory multi-GPU examples:
 
 ```bash
@@ -65,7 +72,29 @@ remote-ssh create --submit --wait-ssh --gpu H100 --card-num 4 --duration-hours 4
 remote-ssh create --submit --wait-ssh --gpu H200 --card-num 4 --duration-hours 4 --job-name "<project>-debug-$(date +%Y%m%d-%H%M%S)"
 ```
 
-### 5. Query SSH for an existing job
+### 5. Start long-running experiments in tmux
+
+After connecting to a new server, treat `tmux` as the default runtime shell for
+experiments that may outlive the SSH connection or need periodic inspection.
+Use the job id or project name as the session name, keep logs on the mounted
+file-storage path, and detach once the run is launched so you can continue with
+other tasks.
+
+Recommended pattern:
+
+```bash
+ssh <HOST> "tmux new-session -Ad -s <SESSION>"
+ssh <HOST> "tmux send-keys -t <SESSION> 'cd <WORKDIR> && <RUN_CMD> 2>&1 | tee -a <LOG_FILE>' C-m"
+```
+
+Operational rules:
+
+- Use a dedicated session per experiment or per sweep.
+- Put checkpoints, logs, and generated artifacts under the mounted file-storage path.
+- Reattach with `tmux attach -t <SESSION>` when you need to inspect progress.
+- If `tmux` is unavailable, fall back to `nohup` only as a last resort.
+
+### 6. Query SSH for an existing job
 
 If there is already an active suitable job, reuse it instead of renting another one:
 
@@ -73,7 +102,7 @@ If there is already an active suitable job, reuse it instead of renting another 
 remote-ssh ssh <job_id> --wait-ssh
 ```
 
-### 6. Verify the remote host
+### 7. Verify the remote host
 
 After resolving SSH commands, verify connectivity before reporting success:
 
@@ -88,7 +117,7 @@ timeout 30 ssh -i ~/.ssh/id_rsa \
 
 Prefer IP-based proxy commands for local execution. If the CLI prints both a domain proxy and a runtime `sshUrl` IP, use the IP plus the original proxy port to avoid TUN/DNS issues.
 
-### 7. Optional reverse proxy tunnel
+### 8. Optional reverse proxy tunnel
 
 If the remote job has no public internet but the local machine has a working
 HTTP/SOCKS proxy, prefer an SSH reverse tunnel before building large offline
@@ -130,7 +159,7 @@ ssh <HOST> 'curl -I --max-time 10 https://huggingface.co || curl -I --max-time 1
 If reverse forwarding is disabled, the local proxy port is wrong, or the test
 fails, fall back to the local-prepare-and-transfer workflow below.
 
-### 8. Probe remote environment, then prepare locally
+### 9. Probe remote environment, then prepare locally
 
 Assume SZU AI Cloud debug jobs do not have public internet access. Do not start
 by running remote `wget`, `curl`, `git clone`, `pip install`, `apt`, `hf
@@ -174,7 +203,7 @@ When reporting a remote setup plan, include: preflight findings, missing
 components, local artifacts prepared, transfer destination, and remote install
 commands.
 
-### 9. Report to user
+### 10. Report to user
 
 Final response should include:
 - task id and task name
@@ -183,7 +212,7 @@ Final response should include:
 - verification result
 - expiry or configured duration
 
-### 10. Tool deployment
+### 11. Tool deployment
 
 When the user mentions `bita` or provides a bita download URL:
 
